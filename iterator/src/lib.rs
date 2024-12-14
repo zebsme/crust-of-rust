@@ -1,82 +1,8 @@
-pub struct Flatten<O>
-where
-    O: IntoIterator,
-    O::Item: IntoIterator,
-{
-    outer: O::IntoIter,
-    front_inner: Option<<O::Item as IntoIterator>::IntoIter>,
-    back_inner: Option<<O::Item as IntoIterator>::IntoIter>,
-}
+mod flatten;
+mod flatten_map;
 
-pub fn flatten<O>(outer: O) -> Flatten<O::IntoIter>
-where
-    O: IntoIterator,
-    O::Item: IntoIterator,
-{
-    Flatten::new(outer.into_iter())
-}
-
-impl<O> Flatten<O>
-where
-    O: IntoIterator,
-    O::Item: IntoIterator,
-{
-    pub fn new(outer: O) -> Self {
-        Flatten {
-            outer: outer.into_iter(),
-            front_inner: None,
-            back_inner: None,
-        }
-    }
-}
-
-impl<O> Iterator for Flatten<O>
-where
-    O: IntoIterator,
-    O::Item: IntoIterator,
-{
-    type Item = <O::Item as IntoIterator>::Item;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if let Some(ref mut inner_iter) = self.front_inner {
-                if let Some(inner) = inner_iter.next() {
-                    return Some(inner);
-                }
-                self.front_inner = None;
-            }
-            if let Some(item) = self.outer.next() {
-                self.front_inner = Some(item.into_iter());
-            } else{
-                return self.back_inner.as_mut()?.next();
-            }
-        }
-    }
-}
-
-impl<O> DoubleEndedIterator for Flatten<O>
-where
-    O: DoubleEndedIterator,
-    O::Item: IntoIterator,
-    <O::Item as IntoIterator>::IntoIter: DoubleEndedIterator,
-{
-    fn next_back(&mut self) -> Option<Self::Item> {
-        loop {
-            if let Some(ref mut inner_iter) = self.back_inner {
-                if let Some(inner) = inner_iter.next_back() {
-                    return Some(inner);
-                }
-                self.back_inner = None;
-            }
-            if let Some(item) = self.outer.next_back() {
-                self.back_inner = Some(item.into_iter());
-            } else {
-                return self.front_inner.as_mut()?.next_back();
-            }
-        }
-    }
-}
-
+pub use flatten::flatten;
+pub use flatten_map::flatten_map;
 
 #[cfg(test)]
 mod tests {
@@ -128,6 +54,20 @@ mod tests {
         assert_eq!(iter.next_back(), Some("b2"));
         assert_eq!(iter.next(), Some("a3"));
         assert_eq!(iter.next_back(), Some("b1"));
+        assert_eq!(iter.next(), None);
+        assert_eq!(iter.next_back(), None);
+    }
+
+    #[test]
+    fn test_flatten_map() {
+        let data = vec![vec![1, 2, 3], vec![4, 5, 6]];
+        let mut iter = flatten_map(data, |x| x.into_iter().map(|x| x * x));
+        assert_eq!(iter.next(), Some(1));
+        assert_eq!(iter.next_back(), Some(36));
+        assert_eq!(iter.next(), Some(4));
+        assert_eq!(iter.next_back(), Some(25));
+        assert_eq!(iter.next(), Some(9));
+        assert_eq!(iter.next_back(), Some(16));
         assert_eq!(iter.next(), None);
         assert_eq!(iter.next_back(), None);
     }
